@@ -20,3 +20,4 @@ def download_dataset(url: str, path: Path):
 
 if __name__ == "__main__":
     download_dataset(DATA_URL, FILE_PATH)
+    
