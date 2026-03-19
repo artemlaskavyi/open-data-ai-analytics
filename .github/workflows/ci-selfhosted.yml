@@ -1,0 +1,57 @@
+name: CI (self-hosted)
+
+on:
+  workflow_dispatch:
+
+env:
+  PYTHONUNBUFFERED: "1"
+  MPLCONFIGDIR: ${{ github.workspace }}/.mplconfig
+
+jobs:
+  run-visualization-local:
+    runs-on: [self-hosted, macOS]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run visualization module on self-hosted
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/visualization "$MPLCONFIGDIR"
+
+          if [ ! -f data/raw/monzp102019.xlsx ]; then
+            python src/data_load.py 2>&1 | tee artifacts/visualization/data_load.log
+          fi
+
+          python src/data_preprocessing.py 2>&1 | tee artifacts/visualization/preprocessing.log
+          python src/visualization.py 2>&1 | tee artifacts/visualization/run.log
+
+      - name: Verify outputs
+        run: |
+          set -euo pipefail
+          test -f reports/figures/regional_wages.png
+          test -f data/processed/3_wage_by_region.csv
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-visualization-selfhosted-${{ github.run_number }}
+          path: |
+            artifacts/visualization
+            reports/figures/regional_wages.png
+            data/processed/*.csv
+            data/raw/monzp102019.xlsx
+          if-no-files-found: warn
