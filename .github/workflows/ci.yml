@@ -1,0 +1,223 @@
+name: CI (modules)
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      module:
+        description: "Which module to run (or 'all')"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - data_load
+          - data_preprocessing
+          - data_quality
+          - data_research
+          - visualization
+
+env:
+  PYTHONUNBUFFERED: "1"
+  MPLCONFIGDIR: ${{ github.workspace }}/.mplconfig
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      common: ${{ steps.filter.outputs.common }}
+      data_inputs: ${{ steps.filter.outputs.data_inputs }}
+      data_load: ${{ steps.filter.outputs.data_load }}
+      data_preprocessing: ${{ steps.filter.outputs.data_preprocessing }}
+      data_quality: ${{ steps.filter.outputs.data_quality }}
+      data_research: ${{ steps.filter.outputs.data_research }}
+      visualization: ${{ steps.filter.outputs.visualization }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            common:
+              - 'requirements.txt'
+              - '.github/workflows/**'
+              - 'README.md'
+              - 'REPORT.md'
+            data_inputs:
+              - 'data/raw/**'
+            data_load:
+              - 'src/data_load.py'
+            data_preprocessing:
+              - 'src/data_preprocessing.py'
+            data_quality:
+              - 'src/data_quality.py'
+            data_research:
+              - 'src/data_research.py'
+            visualization:
+              - 'src/visualization.py'
+
+  run-modules:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [data_load, data_preprocessing, data_quality, data_research, visualization]
+
+    steps:
+      - name: Decide whether this module should run
+        id: gate
+        run: |
+          set -euo pipefail
+          should_run="false"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.module }}" = "all" ] || [ "${{ github.event.inputs.module }}" = "${{ matrix.module }}" ]; then
+              should_run="true"
+            fi
+          else
+            common="${{ needs.detect-changes.outputs.common }}"
+            data_inputs="${{ needs.detect-changes.outputs.data_inputs }}"
+            data_load="${{ needs.detect-changes.outputs.data_load }}"
+            data_preprocessing="${{ needs.detect-changes.outputs.data_preprocessing }}"
+            data_quality="${{ needs.detect-changes.outputs.data_quality }}"
+            data_research="${{ needs.detect-changes.outputs.data_research }}"
+            visualization="${{ needs.detect-changes.outputs.visualization }}"
+
+            if [ "$common" = "true" ] || [ "$data_inputs" = "true" ]; then
+              should_run="true"
+            else
+              case "${{ matrix.module }}" in
+                data_load)
+                  [ "$data_load" = "true" ] && should_run="true"
+                  ;;
+                data_preprocessing)
+                  [ "$data_preprocessing" = "true" ] && should_run="true"
+                  [ "$data_load" = "true" ] && should_run="true"
+                  ;;
+                data_quality)
+                  [ "$data_quality" = "true" ] && should_run="true"
+                  [ "$data_preprocessing" = "true" ] && should_run="true"
+                  [ "$data_load" = "true" ] && should_run="true"
+                  ;;
+                data_research)
+                  [ "$data_research" = "true" ] && should_run="true"
+                  [ "$data_preprocessing" = "true" ] && should_run="true"
+                  [ "$data_load" = "true" ] && should_run="true"
+                  ;;
+                visualization)
+                  [ "$visualization" = "true" ] && should_run="true"
+                  [ "$data_preprocessing" = "true" ] && should_run="true"
+                  [ "$data_load" = "true" ] && should_run="true"
+                  ;;
+              esac
+            fi
+          fi
+
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+          echo "matrix.module=${{ matrix.module }}, should_run=$should_run"
+
+      - name: Checkout
+        if: steps.gate.outputs.should_run == 'true'
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        if: steps.gate.outputs.should_run == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        if: steps.gate.outputs.should_run == 'true'
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run module
+        if: steps.gate.outputs.should_run == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p "artifacts/${{ matrix.module }}" "$MPLCONFIGDIR"
+
+          ensure_input() {
+            if [ ! -f data/raw/monzp102019.xlsx ]; then
+              echo "Input dataset not found. Downloading..."
+              python src/data_load.py
+            fi
+          }
+
+          case "${{ matrix.module }}" in
+            data_load)
+              python src/data_load.py 2>&1 | tee "artifacts/${{ matrix.module }}/run.log"
+              ;;
+            data_preprocessing)
+              ensure_input
+              python src/data_preprocessing.py 2>&1 | tee "artifacts/${{ matrix.module }}/run.log"
+              ;;
+            data_quality)
+              ensure_input
+              python src/data_preprocessing.py 2>&1 | tee "artifacts/${{ matrix.module }}/preprocessing.log"
+              python src/data_quality.py 2>&1 | tee "artifacts/${{ matrix.module }}/run.log"
+              ;;
+            data_research)
+              ensure_input
+              python src/data_preprocessing.py 2>&1 | tee "artifacts/${{ matrix.module }}/preprocessing.log"
+              python src/data_research.py 2>&1 | tee "artifacts/${{ matrix.module }}/run.log"
+              ;;
+            visualization)
+              ensure_input
+              python src/data_preprocessing.py 2>&1 | tee "artifacts/${{ matrix.module }}/preprocessing.log"
+              python src/visualization.py 2>&1 | tee "artifacts/${{ matrix.module }}/run.log"
+              ;;
+            *)
+              echo "Unknown module: ${{ matrix.module }}"
+              exit 1
+              ;;
+          esac
+
+      - name: Verify module outputs
+        if: steps.gate.outputs.should_run == 'true'
+        run: |
+          set -euo pipefail
+          case "${{ matrix.module }}" in
+            data_load)
+              test -f data/raw/monzp102019.xlsx
+              ;;
+            data_preprocessing)
+              test -f data/processed/1_nominal_wage.csv
+              test -f data/processed/2_wage_by_industry.csv
+              test -f data/processed/3_wage_by_region.csv
+              test -f data/processed/4_real_wage.csv
+              ;;
+            data_quality)
+              test -f reports/data_quality_report.md
+              ;;
+            data_research)
+              test -s "artifacts/${{ matrix.module }}/run.log"
+              ;;
+            visualization)
+              test -f reports/figures/regional_wages.png
+              ;;
+          esac
+
+      - name: Upload artifacts
+        if: steps.gate.outputs.should_run == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.module }}-${{ github.run_number }}
+          path: |
+            artifacts/${{ matrix.module }}
+            reports/data_quality_report.md
+            reports/figures/regional_wages.png
+            data/processed/*.csv
+            data/raw/monzp102019.xlsx
+          if-no-files-found: warn
