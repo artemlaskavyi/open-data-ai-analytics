@@ -1,10 +1,10 @@
 import pandas as pd
 from pathlib import Path
+import sys
 
 def preprocess_excel(input_path: Path, output_dir: Path):
     if not input_path.exists():
-        print(f"❌ Файл не знайдено: {input_path}")
-        return
+        raise FileNotFoundError(f"Input file not found: {input_path}")
         
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"🔄 Починаємо обробку файлу: {input_path.name}...")
@@ -65,4 +65,8 @@ def preprocess_excel(input_path: Path, output_dir: Path):
 if __name__ == "__main__":
     RAW_FILE = Path("data/raw/monzp102019.xlsx")
     PROCESSED_DIR = Path("data/processed")
-    preprocess_excel(RAW_FILE, PROCESSED_DIR)
+    try:
+        preprocess_excel(RAW_FILE, PROCESSED_DIR)
+    except Exception as e:
+        print(f"Preprocessing failed: {e}")
+        sys.exit(1)
