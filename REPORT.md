@@ -54,3 +54,54 @@
 * b613af4 docs: define project goals and hypotheses for wage analysis
 * 40a9192 chore: initial project structure and gitignore
 ```
+
+## 6. CI/CD (GitHub Actions)
+
+### 6.1 Реалізований CI (GitHub-hosted)
+Додано workflow: `.github/workflows/ci.yml`.
+
+Тригери:
+- `push` у `main`
+- `pull_request` у `main`
+- `workflow_dispatch` з параметром `module` (`all`, `data_load`, `data_preprocessing`, `data_quality`, `data_research`, `visualization`)
+
+Що робить pipeline:
+- визначає змінені файли через `dorny/paths-filter@v3`;
+- запускає модулі через `matrix` з `fail-fast: false`;
+- встановлює Python 3.11 і залежності з `requirements.txt`;
+- перевіряє очікувані output-файли;
+- публікує artifacts після кожного запуску.
+
+Artifacts:
+- `artifacts/<module>/*.log`
+- `reports/data_quality_report.md`
+- `reports/figures/regional_wages.png`
+- `data/processed/*.csv`
+- `data/raw/monzp102019.xlsx` (якщо завантажився у run)
+
+### 6.2 Реалізований self-hosted pipeline
+Додано workflow: `.github/workflows/ci-selfhosted.yml`.
+
+Параметри:
+- тригер: `workflow_dispatch`
+- runner: `runs-on: [self-hosted, macOS]`
+- сценарій: `data_load -> data_preprocessing -> visualization`
+- artifacts: логи, CSV, PNG
+
+### 6.3 Надійність скриптів для CI
+Оновлено:
+- `src/data_load.py` повертає ненульовий exit code при помилці завантаження;
+- `src/data_preprocessing.py` повертає ненульовий exit code при критичній помилці.
+
+## 7. Порівняння runner-ів
+- GitHub-hosted: стабільно, але оточення щоразу піднімається з нуля.
+- Self-hosted: швидше при прогрітому оточенні і має доступ до локальних ресурсів.
+- Ризики self-hosted: `runner offline`, підтримка безпеки та оновлень на тобі.
+
+## 8. Висновок
+У роботі реалізовано:
+- CI на GitHub-hosted runner;
+- CD через artifacts;
+- окремий self-hosted workflow на macOS;
+- ручний запуск з вибором модуля;
+- оптимізація запуску за зміненими файлами.
