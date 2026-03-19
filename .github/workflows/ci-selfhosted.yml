@@ -15,17 +15,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
+      - name: Verify system Python
+        run: |
+          set -euo pipefail
+          python3 --version
+          pip3 --version
 
       - name: Install dependencies
         run: |
           set -euo pipefail
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python3 -m pip install --upgrade pip
+          pip3 install -r requirements.txt
 
       - name: Run visualization module on self-hosted
         run: |
@@ -33,11 +33,11 @@ jobs:
           mkdir -p artifacts/visualization "$MPLCONFIGDIR"
 
           if [ ! -f data/raw/monzp102019.xlsx ]; then
-            python src/data_load.py 2>&1 | tee artifacts/visualization/data_load.log
+            python3 src/data_load.py 2>&1 | tee artifacts/visualization/data_load.log
           fi
 
-          python src/data_preprocessing.py 2>&1 | tee artifacts/visualization/preprocessing.log
-          python src/visualization.py 2>&1 | tee artifacts/visualization/run.log
+          python3 src/data_preprocessing.py 2>&1 | tee artifacts/visualization/preprocessing.log
+          python3 src/visualization.py 2>&1 | tee artifacts/visualization/run.log
 
       - name: Verify outputs
         run: |
