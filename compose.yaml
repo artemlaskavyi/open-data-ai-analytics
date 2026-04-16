@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  data_load:
+    build: ./data_load
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  data_quality_analysis:
+    build: ./data_quality_analysis
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    volumes:
+      - reports_vol:/app/reports
+    depends_on:
+      db:
+        condition: service_healthy
+      data_load:
+        condition: service_completed_successfully
+    networks:
+      - app-network
+
+  data_research:
+    build: ./data_research
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    volumes:
+      - reports_vol:/app/reports
+    depends_on:
+      db:
+        condition: service_healthy
+      data_load:
+        condition: service_completed_successfully
+    networks:
+      - app-network
+
+  visualization:
+    build: ./visualization
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    volumes:
+      - plots_vol:/app/plots
+    depends_on:
+      db:
+        condition: service_healthy
+      data_load:
+        condition: service_completed_successfully
+    networks:
+      - app-network
+
+  web:
+    build: ./web
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    volumes:
+      - reports_vol:/app/reports
+      - plots_vol:/app/plots
+    depends_on:
+      db:
+        condition: service_healthy
+      data_quality_analysis:
+        condition: service_completed_successfully
+      data_research:
+        condition: service_completed_successfully
+      visualization:
+        condition: service_completed_successfully
+    networks:
+      - app-network
+
+volumes:
+  pgdata:
+  reports_vol:
+  plots_vol:
+
+networks:
+  app-network:
