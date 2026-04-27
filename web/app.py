@@ -5,8 +5,10 @@ import json
 import os
 import pandas as pd
 from sqlalchemy import create_engine
+from prometheus_flask_exporter import PrometheusMetrics
 
 app = Flask(__name__)
+metrics = PrometheusMetrics(app)
 
 REPORTS_DIR = Path("/app/reports")
 PLOTS_DIR = Path("/app/plots")
