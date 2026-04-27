@@ -40,4 +40,4 @@ runcmd:
   - echo "POSTGRES_DB=opendata" >> .env
 
   # Run Docker Compose
-  - docker compose up --build -d
+  - docker compose -f compose.yaml -f monitoring/docker-compose.monitoring.yml up --build -d
