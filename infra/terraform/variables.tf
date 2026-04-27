@@ -1,6 +1,6 @@
 variable "resource_group_location" {
   type        = string
-  default     = "westeurope"
+  default     = "polandcentral"
   description = "Location of the resource group."
 }
 
@@ -12,7 +12,7 @@ variable "resource_group_name_prefix" {
 
 variable "vm_size" {
   type        = string
-  default     = "Standard_B1s"
+  default     = "Standard_D2s_v3"
   description = "Size of the virtual machine."
 }
 
